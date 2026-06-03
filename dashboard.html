@@ -105,7 +105,14 @@
 const $ = id => document.getElementById(id);
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function err(msg){ const b=$('errBanner'); if(msg){ b.textContent=msg; b.style.display='block'; } else b.style.display='none'; }
-async function getJSON(u){ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw new Error(u+' → HTTP '+r.status); return r.json(); }
+async function getJSON(u){
+  // Cache-bust via query param instead of {cache:'no-store'} — the latter throws
+  // "The string did not match the expected pattern" in Safari/WebKit.
+  const sep = u.indexOf('?') >= 0 ? '&' : '?';
+  const r = await fetch(u + sep + '_t=' + Date.now());
+  if(!r.ok) throw new Error(u+' → HTTP '+r.status);
+  return r.json();
+}
 
 let _openTx = null; // tx_hash currently expanded
 
