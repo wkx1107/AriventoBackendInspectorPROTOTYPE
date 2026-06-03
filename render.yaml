@@ -1,0 +1,13 @@
+# Render Blueprint — deploys the Arivento backend + Inspector as a free web service.
+# Push the *backend/* folder as a Git repo, then on render.com: New → Blueprint → pick the repo.
+services:
+  - type: web
+    name: arivento-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Render injects $PORT; bind 0.0.0.0 so it's publicly reachable.
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"

@@ -1,0 +1,12 @@
+# Local environment & runtime artifacts — never deploy these
+.venv/
+__pycache__/
+*.pyc
+
+# Local SQLite database (Render rebuilds an empty one on first run)
+arivento.sqlite3
+arivento.sqlite3-wal
+arivento.sqlite3-shm
+
+.DS_Store
+.Rhistory

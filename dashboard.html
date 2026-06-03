@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arivento Backend Inspector</title>
+<style>
+  :root{ --primary:#0F52BA; --primary-50:#EFF6FF; --secondary:#2E8B57; --accent:#FF7F50;
+    --dark:#1A202C; --gray-50:#F8FAFC; --gray-100:#F1F5F9; --gray-200:#E2E8F0;
+    --gray-400:#94A3B2; --gray-500:#64748B; --gray-600:#475569; --gray-700:#334155;
+    --good:#10B981; --warn:#F59E0B; --bad:#EF4444; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--gray-50);color:var(--dark);font-size:14px;line-height:1.5}
+  .top{background:var(--dark);color:#fff;padding:16px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .top h1{font-size:17px;font-weight:800;letter-spacing:-.3px}
+  .top .sub{font-size:11px;color:#9CA3AF}
+  .spacer{flex:1}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .dot.up{background:var(--good);box-shadow:0 0 0 3px rgba(16,185,129,.25)}
+  .dot.down{background:var(--bad)}
+  .pill{display:inline-block;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700}
+  .pill.good{background:#DCFCE7;color:#065F46}.pill.bad{background:#FEE2E2;color:#991B1B}
+  .pill.muted{background:var(--gray-100);color:var(--gray-600)}
+  .pill.info{background:#DBEAFE;color:#1E40AF}
+  label.tog{font-size:12px;color:#CBD5E0;display:flex;align-items:center;gap:6px;cursor:pointer}
+  .wrap{padding:20px 24px 60px;max-width:1180px;margin:0 auto}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  @media(max-width:760px){.kpis{grid-template-columns:1fr 1fr}}
+  .kpi{background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:14px 16px}
+  .kpi .l{font-size:10.5px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+  .kpi .v{font-size:26px;font-weight:800;margin-top:4px}
+  .card{background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+  .card h2{font-size:15px;font-weight:700;margin-bottom:2px}
+  .card .desc{font-size:12px;color:var(--gray-500);margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--gray-200);vertical-align:top}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-500);font-weight:700;background:var(--gray-50)}
+  tr.blk{cursor:pointer}tr.blk:hover td{background:var(--primary-50)}
+  .mono{font-family:ui-monospace,'SF Mono','Menlo',monospace;font-size:11px;word-break:break-all}
+  .hashlink{color:var(--primary);font-weight:600}
+  .payload{background:var(--gray-50);border:1px dashed var(--gray-200);border-radius:8px;padding:10px;margin:2px 0 6px;
+    font-family:ui-monospace,'SF Mono','Menlo',monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;color:var(--gray-700)}
+  .empty{padding:26px;text-align:center;color:var(--gray-500);font-size:13px}
+  .chainflag{font-size:12px;font-weight:700;margin-bottom:10px}
+  .err-banner{background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;display:none}
+  .links a{color:var(--primary);font-size:12px;margin-right:14px;text-decoration:none}
+  .links a:hover{text-decoration:underline}
+  button.rf{background:var(--primary);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-weight:600;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <h1>Arivento · Backend Inspector</h1>
+    <div class="sub">Read-only view of the persisted SQLite ledger · FastAPI on this origin</div>
+  </div>
+  <div class="spacer"></div>
+  <span id="status"><span class="dot down"></span><span style="color:#CBD5E0;font-size:12px">connecting…</span></span>
+  <label class="tog"><input type="checkbox" id="autoref" checked> auto-refresh 5s</label>
+  <button class="rf" onclick="loadAll()">Refresh now</button>
+</div>
+
+<div class="wrap">
+  <div class="err-banner" id="errBanner"></div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="l">Ledger blocks</div><div class="v" id="kBlocks">—</div></div>
+    <div class="kpi"><div class="l">Transactions</div><div class="v" id="kTxs">—</div></div>
+    <div class="kpi"><div class="l">Doc anchors</div><div class="v" id="kDocs">—</div></div>
+    <div class="kpi"><div class="l">Chain integrity</div><div class="v" id="kChain">—</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Ledger blocks</h2>
+    <div class="desc">Newest first · click a row to load the full transaction payload that was hashed. Chain check verifies each <code>prev_hash</code> equals the previous block's <code>block_hash</code>.</div>
+    <div class="chainflag" id="chainFlag"></div>
+    <table><thead><tr><th>#</th><th>Time</th><th>Event</th><th>Block hash</th><th>Prev</th><th>Link</th></tr></thead>
+      <tbody id="blocksBody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Document anchors</h2>
+    <div class="desc">Import Doc Copilot records persisted from the prototype.</div>
+    <table><thead><tr><th>Doc type</th><th>File</th><th>Block #</th><th>Lot / shipment</th><th>Conf.</th><th>Verdict</th></tr></thead>
+      <tbody id="docsBody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Raw endpoints &amp; tools</h2>
+    <div class="links">
+      <a href="/docs" target="_blank">Swagger UI ↗</a>
+      <a href="/redoc" target="_blank">ReDoc ↗</a>
+      <a href="/openapi.json" target="_blank">OpenAPI JSON ↗</a>
+      <a href="/api/ledger/blocks" target="_blank">/api/ledger/blocks ↗</a>
+      <a href="/api/documents/anchors" target="_blank">/api/documents/anchors ↗</a>
+      <a href="/health" target="_blank">/health ↗</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function err(msg){ const b=$('errBanner'); if(msg){ b.textContent=msg; b.style.display='block'; } else b.style.display='none'; }
+async function getJSON(u){ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw new Error(u+' → HTTP '+r.status); return r.json(); }
+
+let _openTx = null; // tx_hash currently expanded
+
+async function loadAll(){
+  try {
+    const h = await getJSON('/health');
+    $('status').innerHTML = '<span class="dot up"></span><span style="color:#DCFCE7;font-size:12px">online · '+esc(h.status)+'</span>';
+    err(null);
+  } catch(e){
+    $('status').innerHTML = '<span class="dot down"></span><span style="color:#FCA5A5;font-size:12px">offline</span>';
+    err('Cannot reach the backend on this origin. Is uvicorn running on this port? ('+e.message+')');
+    return;
+  }
+  try {
+    const [bl, dc] = await Promise.all([ getJSON('/api/ledger/blocks?limit=500'), getJSON('/api/documents/anchors?limit=500') ]);
+    renderBlocks(bl.blocks||[]);
+    renderDocs(dc.anchors||[]);
+  } catch(e){ err(e.message); }
+}
+
+function renderBlocks(blocks){
+  $('kBlocks').textContent = blocks.length;
+  // tx count = distinct tx_hash
+  $('kTxs').textContent = new Set(blocks.map(b=>b.tx_hash)).size;
+  // chain check: blocks come newest-first; each block[i].prev_hash should equal block[i+1].block_hash
+  let broken=0;
+  for(let i=0;i<blocks.length-1;i++){ if(blocks[i].prev_hash !== blocks[i+1].block_hash) broken++; }
+  // genesis (oldest) should chain to all-zeros
+  const genesisOK = !blocks.length || blocks[blocks.length-1].prev_hash === '0x'+'0'.repeat(64);
+  const intact = broken===0 && genesisOK;
+  $('kChain').innerHTML = blocks.length ? (intact?'<span style="color:var(--good)">✓ intact</span>':'<span style="color:var(--bad)">✗ '+broken+' break(s)</span>') : '—';
+  $('chainFlag').innerHTML = blocks.length ? (intact
+    ? '<span class="pill good">✓ Hash chain verified — every block links to its predecessor</span>'
+    : '<span class="pill bad">✗ '+broken+' chain break(s) detected</span>') : '';
+
+  const body = $('blocksBody');
+  if(!blocks.length){ body.innerHTML = '<tr><td colspan="6" class="empty">No blocks yet. Anchor something in the prototype (with the backend connected) and it will appear here.</td></tr>'; return; }
+  body.innerHTML = blocks.map((b,i)=>{
+    const linkOK = (i===blocks.length-1) ? (b.prev_hash==='0x'+'0'.repeat(64)) : (b.prev_hash===blocks[i+1].block_hash);
+    const linkPill = (i===blocks.length-1 && b.prev_hash==='0x'+'0'.repeat(64))
+      ? '<span class="pill muted">genesis</span>'
+      : (linkOK ? '<span class="pill good">✓</span>' : '<span class="pill bad">✗</span>');
+    const row = `<tr class="blk" onclick="toggleTx('${esc(b.tx_hash)}', this)">
+      <td><b>${esc(b.block_number)}</b></td>
+      <td>${esc(b.ts_str)}</td>
+      <td>${esc(b.event_label)}</td>
+      <td class="mono hashlink">${esc(b.block_hash).slice(0,22)}…</td>
+      <td class="mono" style="color:var(--gray-500)">${esc(b.prev_hash).slice(0,14)}…</td>
+      <td>${linkPill}</td></tr>`;
+    const detail = `<tr id="tx-${esc(b.tx_hash)}" style="display:${_openTx===b.tx_hash?'table-row':'none'}"><td colspan="6">
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">tx_hash <span class="mono">${esc(b.tx_hash)}</span> · nonce <span class="mono">${esc(b.nonce)}</span></div>
+      <div class="payload" id="pl-${esc(b.tx_hash)}">click to load payload…</div></td></tr>`;
+    return row + detail;
+  }).join('');
+  // re-open the previously expanded payload after refresh
+  if(_openTx) loadPayload(_openTx);
+}
+
+async function toggleTx(txHash, rowEl){
+  const det = $('tx-'+txHash);
+  if(!det) return;
+  const open = det.style.display!=='none';
+  if(open){ det.style.display='none'; _openTx=null; return; }
+  // close others
+  document.querySelectorAll('[id^="tx-"]').forEach(d=>d.style.display='none');
+  det.style.display='table-row'; _openTx=txHash;
+  loadPayload(txHash);
+}
+async function loadPayload(txHash){
+  const el = $('pl-'+txHash); if(!el) return;
+  try { const d = await getJSON('/api/ledger/tx/'+encodeURIComponent(txHash));
+    el.textContent = JSON.stringify(d.payload, null, 2);
+  } catch(e){ el.textContent = 'Could not load payload: '+e.message; }
+}
+
+function renderDocs(docs){
+  $('kDocs').textContent = docs.length;
+  const body = $('docsBody');
+  if(!docs.length){ body.innerHTML = '<tr><td colspan="6" class="empty">No document anchors persisted yet.</td></tr>'; return; }
+  body.innerHTML = docs.map(d=>{
+    const v = d.verdictClass||''; const vp = v==='good'?'<span class="pill good">auto-pass</span>':v==='warn'?'<span class="pill info">review</span>':v==='bad'?'<span class="pill bad">hold</span>':'<span class="pill muted">—</span>';
+    return `<tr><td><b>${esc(d.docType)}</b></td><td>${esc(d.file)}</td><td>${esc(d.blockNumber)}</td>
+      <td>${esc(d.lot||d.shipmentRef||'—')}</td><td>${d.conf!=null?esc(d.conf)+'%':'—'}</td><td>${vp}</td></tr>`;
+  }).join('');
+}
+
+loadAll();
+setInterval(()=>{ if($('autoref').checked) loadAll(); }, 5000);
+</script>
+</body>
+</html>
